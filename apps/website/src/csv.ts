@@ -4,6 +4,7 @@ export interface SongRow {
   title: string;
   artist: string;
   spotifyUrl: string;
+  appleMusicUrl: string;
   tsutayaUrl: string;
   geoUrl: string;
 }
@@ -14,11 +15,18 @@ function escapeCell(s: string): string {
 }
 
 export function buildCsv(rows: SongRow[]): string {
-  const header = ["title", "artist", "spotify_url", "tsutaya_discas_url", "geo_rental_url"].join(
-    ",",
-  );
+  const header = [
+    "title",
+    "artist",
+    "spotify_url",
+    "apple_music_url",
+    "tsutaya_discas_url",
+    "geo_rental_url",
+  ].join(",");
   const body = rows.map((r) =>
-    [r.title, r.artist, r.spotifyUrl, r.tsutayaUrl, r.geoUrl].map(escapeCell).join(","),
+    [r.title, r.artist, r.spotifyUrl, r.appleMusicUrl, r.tsutayaUrl, r.geoUrl]
+      .map(escapeCell)
+      .join(","),
   );
   return BOM + [header, ...body].join("\r\n") + "\r\n";
 }

@@ -1,4 +1,4 @@
-export type ServiceId = "spotify" | "tsutaya" | "geo";
+export type ServiceId = "spotify" | "tsutaya" | "geo" | "appleMusic";
 
 export interface ServiceDef {
   id: ServiceId;
@@ -25,8 +25,14 @@ export function geoRentalSearchUrl(title: string, artist: string): string {
   return q ? `https://geo-online.co.jp/search/?keyword=${encodeURIComponent(q)}` : "";
 }
 
+export function appleMusicSearchUrl(title: string, artist: string): string {
+  const q = combine(title, artist);
+  return q ? `https://music.apple.com/search?term=${encodeURIComponent(q)}` : "";
+}
+
 export const SERVICES: ServiceDef[] = [
   { id: "spotify", label: "Spotify", buildUrl: spotifySearchUrl },
+  { id: "appleMusic", label: "Apple Music", buildUrl: appleMusicSearchUrl },
   { id: "tsutaya", label: "TSUTAYA DISCAS", buildUrl: tsutayaDiscasSearchUrl },
   { id: "geo", label: "GEO 宅配レンタル", buildUrl: geoRentalSearchUrl },
 ];
