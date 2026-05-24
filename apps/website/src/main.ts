@@ -50,7 +50,7 @@ function initMainUI(): void {
         <input type="file" id="file-input" accept="image/*" multiple hidden />
         <span>クリックで選択 / 画像をドラッグ&amp;ドロップ / ペースト</span>
       </label>
-      <ul id="entries"></ul>
+      <div id="entries"></div>
       <footer>
         <button id="reconfigure" type="button">クロップ範囲を再設定</button>
         <button id="clear" type="button" disabled>クリア</button>
@@ -61,7 +61,7 @@ function initMainUI(): void {
 
   const fileInput = document.querySelector<HTMLInputElement>("#file-input");
   const dropzone = document.querySelector<HTMLLabelElement>("#dropzone");
-  const entriesEl = document.querySelector<HTMLUListElement>("#entries");
+  const entriesEl = document.querySelector<HTMLDivElement>("#entries");
   const downloadBtn = document.querySelector<HTMLButtonElement>("#download");
   const clearBtn = document.querySelector<HTMLButtonElement>("#clear");
   const reconfigureBtn = document.querySelector<HTMLButtonElement>("#reconfigure");
@@ -156,48 +156,120 @@ function initMainUI(): void {
     }
   }
 
+  function entryRow(e: Entry): string {
+    const spotify = spotifySearchUrl(e.title, e.artist);
+    const appleMusic = appleMusicSearchUrl(e.title, e.artist);
+    const tsutaya = tsutayaDiscasSearchUrl(e.title, e.artist);
+    const geo = geoRentalSearchUrl(e.title, e.artist);
+
+    const serviceLink = (url: string, label: string): string =>
+      `<a href="${escapeAttr(url)}" class="service-link${url ? "" : " disabled"}">${label}</a>`;
+
+    return `
+      <tr class="entry" data-id="${e.id}">
+        <td class="td-thumb">
+          <img src="${e.thumbnailUrl}" alt="" class="thumb" />
+          ${e.bannerUrl ? `<img src="${e.bannerUrl}" alt="" class="banner" />` : ""}
+        </td>
+        <td class="td-field">
+          <input type="text" data-field="title" value="${escapeAttr(e.title)}" placeholder="曲名" />
+          ${e.status === "processing" ? `<div class="progress" data-progress="${e.id}">処理中…</div>` : ""}
+          ${e.status === "error" ? `<div class="error">読み取り失敗</div>` : ""}
+          <div class="filename">${escapeText(e.filename)}</div>
+        </td>
+        <td class="td-field">
+          <input type="text" data-field="artist" value="${escapeAttr(e.artist)}" placeholder="アーティスト" />
+        </td>
+        <td class="td-link">${serviceLink(spotify, "Spotify")}</td>
+        <td class="td-link">${serviceLink(appleMusic, "Apple Music")}</td>
+        <td class="td-link">${serviceLink(tsutaya, "TSUTAYA")}</td>
+        <td class="td-link">${serviceLink(geo, "GEO")}</td>
+        <td class="td-remove">
+          <button type="button" class="remove" data-remove="${e.id}" aria-label="削除">×</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  function refreshServiceLinks(tr: HTMLTableRowElement, entry: Entry): void {
+    const urls = [
+      spotifySearchUrl(entry.title, entry.artist),
+      appleMusicSearchUrl(entry.title, entry.artist),
+      tsutayaDiscasSearchUrl(entry.title, entry.artist),
+      geoRentalSearchUrl(entry.title, entry.artist),
+    ];
+    tr.querySelectorAll<HTMLAnchorElement>("a.service-link").forEach((a, i) => {
+      const url = urls[i] ?? "";
+      a.href = url;
+      a.classList.toggle("disabled", !url);
+    });
+  }
+
+  function attachRowListeners(tr: HTMLTableRowElement): void {
+    const id = tr.dataset["id"];
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) return;
+
+    tr.querySelectorAll<HTMLInputElement>("input[data-field]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const field = input.dataset["field"];
+        if (field === "title" || field === "artist") {
+          entry[field] = input.value;
+          refreshServiceLinks(tr, entry);
+          updateButtons();
+        }
+      });
+    });
+
+    tr.querySelector<HTMLButtonElement>(".remove")?.addEventListener("click", () => {
+      URL.revokeObjectURL(entry.thumbnailUrl);
+      const idx = entries.indexOf(entry);
+      if (idx >= 0) entries.splice(idx, 1);
+      render();
+    });
+
+    tr.querySelectorAll<HTMLAnchorElement>("a.service-link").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const url = a.getAttribute("href");
+        if (url)
+          window.open(url, "_blank", "width=1024,height=768,resizable=yes,scrollbars=yes,noopener");
+      });
+    });
+  }
+
   function render(): void {
     if (!entriesEl) return;
-    entriesEl.innerHTML = entries
-      .map(
-        (e) => `
-          <li class="entry" data-id="${e.id}">
-            <div class="thumbs">
-              <img src="${e.thumbnailUrl}" alt="" class="thumb" />
-              ${e.bannerUrl ? `<img src="${e.bannerUrl}" alt="" class="banner" />` : ""}
-            </div>
-            <div class="fields">
-              <label>曲名 <input type="text" data-field="title" value="${escapeAttr(e.title)}" placeholder="曲名" /></label>
-              <label>アーティスト <input type="text" data-field="artist" value="${escapeAttr(e.artist)}" placeholder="アーティスト" /></label>
-              <small class="filename">${escapeText(e.filename)}</small>
-              ${e.status === "processing" ? `<span class="progress" data-progress="${e.id}">処理中…</span>` : ""}
-              ${e.status === "error" ? `<span class="error">読み取り失敗</span>` : ""}
-            </div>
-            <button type="button" class="remove" data-remove="${e.id}" aria-label="削除">×</button>
-          </li>
-        `,
-      )
-      .join("");
+    if (entries.length === 0) {
+      entriesEl.innerHTML = "";
+      updateButtons();
+      return;
+    }
 
-    for (const li of entriesEl.querySelectorAll<HTMLLIElement>(".entry")) {
-      const id = li.dataset["id"];
-      const entry = entries.find((e) => e.id === id);
-      if (!entry) continue;
-      li.querySelectorAll<HTMLInputElement>("input[data-field]").forEach((input) => {
-        input.addEventListener("input", () => {
-          const field = input.dataset["field"];
-          if (field === "title" || field === "artist") {
-            entry[field] = input.value;
-            updateButtons();
-          }
-        });
-      });
-      li.querySelector<HTMLButtonElement>(".remove")?.addEventListener("click", () => {
-        URL.revokeObjectURL(entry.thumbnailUrl);
-        const idx = entries.indexOf(entry);
-        if (idx >= 0) entries.splice(idx, 1);
-        render();
-      });
+    entriesEl.innerHTML = `
+      <div class="table-wrap">
+        <table class="entries-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>曲名</th>
+              <th>アーティスト</th>
+              <th>Spotify</th>
+              <th>Apple Music</th>
+              <th>TSUTAYA</th>
+              <th>GEO</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map(entryRow).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    for (const tr of entriesEl.querySelectorAll<HTMLTableRowElement>("tr.entry")) {
+      attachRowListeners(tr);
     }
     updateButtons();
   }
